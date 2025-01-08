@@ -1,0 +1,3 @@
+CREATE DATABASE reddit_data;
+GRANT ALL PRIVILEGES ON DATABASE airflow TO airflow;
+GRANT ALL PRIVILEGES ON DATABASE reddit_data TO airflow; 

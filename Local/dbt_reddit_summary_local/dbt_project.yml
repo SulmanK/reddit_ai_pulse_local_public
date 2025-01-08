@@ -1,0 +1,29 @@
+name: 'dbt_reddit_summary_local'
+version: '1.0.0'
+profile: 'dbt_reddit_summary_local'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  dbt_reddit_summary_local:
+    +materialized: table  # Default materialization for all models
+    current_summary_staging:
+      +materialized: view  # Specific materialization for this model
+    joined_summary_analysis:
+      +materialized: table  # Materialization for the joined_summary_analysis model
+    update_processing_status:
+      +materialized: incremental
+
+vars:
+  subreddits: ['dataengineering', 'datascience', 'machinelearning', 'claudeai',
+   'singularity', 'localllama', 'openai', 'stablediffusion']  # Define all subreddits
+  

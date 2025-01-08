@@ -1,0 +1,5 @@
+**/logs/
+**/*.pyc
+**/__pycache__
+.git
+.gitignore 
