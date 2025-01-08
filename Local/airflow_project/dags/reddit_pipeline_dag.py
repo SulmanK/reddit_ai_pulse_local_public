@@ -88,6 +88,10 @@ def parse_join_metrics(**context):
     return extract_join_metrics(log_path)
 
 DBT_TEST_CMD = 'cd /opt/airflow/dags/dbt_reddit_summary_local && dbt deps && dbt test --select {selector}'
+# Get yesterday's date to ensure we don't miss today's run
+yesterday = datetime.now() - timedelta(days=1)
+yesterday = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
+
 # Define the DAG
 with DAG(
     'reddit_pipeline',
@@ -101,7 +105,7 @@ with DAG(
     },
     description='Reddit data pipeline - Runs daily at 4:00 PM EST',
     schedule_interval='0 21 * * *',  # Run at 21:00 UTC (4:00 PM EST)
-    start_date=datetime(2024, 1, 1),
+    start_date=yesterday,  # Start from yesterday
     catchup=False
 ) as dag:
     
