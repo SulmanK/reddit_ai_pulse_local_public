@@ -146,6 +146,9 @@ The diagram above illustrates the flow of data through our system, from collecti
    ```bash
    airflow dags unpause reddit_pipeline_dag
    ```
+7. Check the website:
+    - [Website](https://reddit-text-insight-and-sentiment-website-local.vercel.app/)
+    - [Blog](https://sulmank.github.io/Blog/writing/2025/01/08/Reddit%20AI%20Pulse%20%28ON-PREM%29/)
 
 ## Tech Stack
 
