@@ -134,7 +134,7 @@ The diagram above illustrates the flow of data through our system, from collecti
 3. Configure credentials in `.env`
 4. Install dependencies:
    ```bash
-   docker compose --env-file ../.env up -d # always include the env file
+   cd Local/docker && docker compose --env-file ../.env up -d # always include the env file
    ```
 5. Access services:
    - Airflow: http://localhost:8080
