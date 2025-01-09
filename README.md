@@ -11,6 +11,7 @@ This project implements an end-to-end data pipeline that:
 - Analyzes sentiment using RoBERTa
 - Generates insights using Google's Gemini
 - Provides monitoring through Prometheus & Grafana
+- Provides a web application to visualize the data
 
 ## Architecture
 
