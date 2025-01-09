@@ -84,19 +84,12 @@ def push_gemini_results(**context):
         
     Returns:
         None
-        
-    Directory Structure:
-        results/
-        └── YYYY/
-            └── MM/
-                └── DD/
-                    ├── llm_subreddit1.md
-                    ├── llm_subreddit2.md
-                    └── ...
     """
-    # Get today's date for the folder path
-    date = context['ds']
-    year, month, day = date.split('-')
+    # Get current date for the folder path
+    current_date = datetime.now()
+    year = current_date.strftime('%Y')
+    month = current_date.strftime('%m')
+    day = current_date.strftime('%d')
     
     # Path to results directory
     results_path = f"Local/results/{year}/{month}/{day}/*.md"
@@ -134,7 +127,7 @@ def push_gemini_results(**context):
             
             # Prepare the commit
             body = {
-                "message": f"Update analysis for {filename} - {date}",
+                "message": f"Update analysis for {filename} - {current_date}",
                 "content": content_encoded,
                 "sha": sha  # Include SHA if file exists
             }
