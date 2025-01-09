@@ -3,6 +3,7 @@ import re
 import time
 import statsd
 from datetime import datetime
+from Local.airflow_project.plugins.logging_utils import get_log_path
 
 # Initialize StatsD client
 statsd_client = statsd.StatsClient(
@@ -11,16 +12,8 @@ statsd_client = statsd.StatsClient(
     prefix='airflow.reddit'
 )
 
-def get_log_path(task_instance, task_id='run_sentiment_analysis'):
-    """Construct the log file path from task instance"""
-    dag_id = task_instance.dag_id
-    execution_date = task_instance.execution_date.strftime('%Y-%m-%dT%H:%M:%S.%f') + '+00:00'
-    attempt = task_instance.try_number
-    
-    return f"/opt/airflow/logs/dag_id={dag_id}/run_id=manual__{execution_date}/task_id={task_id}/attempt={attempt}.log"
-
 def extract_sentiment_metrics(log_path):
-    """Extract sentiment analysis metrics from logs"""
+    """Extract metrics from sentiment analysis task logs"""
     metrics = {
         'sentiments_processed': 0,
         'attempt': int(re.search(r"attempt=(\d+)", log_path).group(1)),

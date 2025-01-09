@@ -4,11 +4,7 @@ import time
 import statsd
 import psycopg2
 from datetime import datetime
-import sys
-import os
-
-# Add the project root directory to Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+from Local.airflow_project.plugins.logging_utils import get_log_path
 from config.config import get_database_config
 
 # Initialize StatsD client
@@ -18,16 +14,8 @@ statsd_client = statsd.StatsClient(
     prefix='airflow.reddit'
 )
 
-def get_log_path(task_instance, task_id='run_dbt_join_summary_analysis'):
-    """Construct the log file path from task instance"""
-    dag_id = task_instance.dag_id
-    execution_date = task_instance.execution_date.strftime('%Y-%m-%dT%H:%M:%S.%f') + '+00:00'
-    attempt = task_instance.try_number
-    
-    return f"/opt/airflow/logs/dag_id={dag_id}/run_id=manual__{execution_date}/task_id={task_id}/attempt={attempt}.log"
-
 def extract_join_metrics(log_path):
-    """Extract metrics from join operation logs and database"""
+    """Extract metrics from join operation task logs"""
     metrics = {
         'rows_joined': 0,
         'attempt': int(re.search(r"attempt=(\d+)", log_path).group(1)),

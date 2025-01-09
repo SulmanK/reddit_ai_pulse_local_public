@@ -27,14 +27,18 @@ import logging
 from airflow.stats import Stats
 from contextlib import contextmanager
 import json
-from Local.airflow_project.plugins.log_ingest_preprocess_metrics import get_log_path, extract_metrics_from_log
-from Local.airflow_project.plugins.log_dbt_test_metrics import get_log_path, extract_dbt_test_metrics
+
+# Import plugins with correct paths
+from Local.airflow_project.plugins.logging_utils import get_log_path
+from Local.airflow_project.plugins.log_ingest_preprocess_metrics import extract_metrics_from_log
+from Local.airflow_project.plugins.log_dbt_test_metrics import extract_dbt_test_metrics
 from Local.airflow_project.plugins.log_summarize_metrics import extract_summarize_metrics
-from plugins.log_sentiment_analysis_metrics import extract_sentiment_metrics
-from plugins.log_join_metrics import extract_join_metrics
-from plugins.log_update_processing_status_metrics import extract_processing_status_metrics
-from plugins.log_gemini_metrics import extract_gemini_metrics
-from plugins.push_to_github import push_gemini_results
+from Local.airflow_project.plugins.log_sentiment_analysis_metrics import extract_sentiment_metrics
+from Local.airflow_project.plugins.log_join_metrics import extract_join_metrics
+from Local.airflow_project.plugins.log_update_processing_status_metrics import extract_processing_status_metrics
+from Local.airflow_project.plugins.log_gemini_metrics import extract_gemini_metrics
+from Local.airflow_project.plugins.push_to_github import push_gemini_results
+
 # Set environment variables for project paths
 os.environ['PROJECT_ROOT'] = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
 os.environ['DBT_PROJECT_DIR'] = '/opt/airflow/dags/dbt_reddit_summary_local'
@@ -88,9 +92,6 @@ def parse_join_metrics(**context):
     return extract_join_metrics(log_path)
 
 DBT_TEST_CMD = 'cd /opt/airflow/dags/dbt_reddit_summary_local && dbt deps && dbt test --select {selector}'
-# Get yesterday's date to ensure we don't miss today's run
-yesterday = datetime.now() - timedelta(days=1)
-yesterday = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
 
 # Define the DAG
 with DAG(
@@ -103,10 +104,11 @@ with DAG(
         'retries': 1,
         'retry_delay': timedelta(minutes=5),
     },
-    description='Reddit data pipeline - Runs daily at 4:00 PM EST',
-    schedule_interval='0 21 * * *',  # Run at 21:00 UTC (4:00 PM EST)
-    start_date=yesterday,  # Start from yesterday
-    catchup=False
+    description='Reddit data pipeline - Runs daily at 5:00 PM EST',
+    schedule_interval='0 22 * * *',  # Run at 22:00 UTC (5:00 PM EST)
+    start_date=datetime(2024, 1, 1),
+    catchup=False,
+    max_active_runs=1
 ) as dag:
     
     # 1st Stage: Ingest and Preprocess
