@@ -118,7 +118,7 @@ def push_gemini_results(**context):
         filename = os.path.basename(md_file)
         
         # GitHub API endpoint - storing in 'results' directory
-        url = f"https://api.github.com/repos/{os.environ['GITHUB_OWNER']}/{os.environ['GITHUB_REPO']}/contents/results/{year}/{month}/{day}/{filename}"
+        url = f"https://api.github.com/repos/{os.environ['GITHUB_OWNER']}/{os.environ['GITHUB_REPO']}/contents/Local/results/{year}/{month}/{day}/{filename}"
         
         headers = {
             "Authorization": f"token {os.environ['GITHUB_TOKEN']}",
