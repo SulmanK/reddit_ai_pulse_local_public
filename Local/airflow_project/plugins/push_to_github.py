@@ -84,6 +84,15 @@ def push_gemini_results(**context):
         
     Returns:
         None
+        
+    Directory Structure:
+        results/
+        └── YYYY/
+            └── MM/
+                └── DD/
+                    ├── llm_subreddit1.md
+                    ├── llm_subreddit2.md
+                    └── ...
     """
     # Get current date for the folder path
     current_date = datetime.now()

@@ -9,12 +9,62 @@ Owner: Sulman Khan
 
 import pyspark.sql.functions as F
 from pyspark.sql.types import StructType, StructField, StringType, LongType, ArrayType, DoubleType, BooleanType
-import logging
+from utils.custom_logging import get_logger
 from config.config import DB_PARAMS, SUBREDDITS
+from better_profanity import Profanity
 import re
 
-
+# Configure logging
+logger = get_logger(__name__)  # This will create a logger named 'reddit_pipeline.preprocessing.data_processing'
 jdbc_url = f"jdbc:postgresql://{DB_PARAMS['host']}:{DB_PARAMS['port']}/{DB_PARAMS['dbname']}"
+
+def get_profanity_pattern():
+    """Get the profanity pattern using better-profanity's word list and additional patterns."""
+    profanity = Profanity()
+    profanity.load_censor_words()
+    
+    # Add some additional phrases that might not be in the default list
+    additional_phrases = {
+        'wtf', 'stfu', 'bullcrap', 'dhead', 'douche'
+    }
+    profanity.add_censor_words(additional_phrases)
+    
+    # Common false positives to exclude
+    false_positives = {
+        'frank', 'floor', 'fridge', 'future', 'first', 'flip', 'fact', 'from', 'for',
+        'food', 'free', 'front', 'frame', 'fresh', 'friday', 'friend'
+    }
+    
+    # Get all words and escape special regex characters, excluding false positives
+    all_words = [re.escape(str(word)) for word in profanity.CENSOR_WORDSET 
+                 if str(word).lower() not in false_positives]
+    
+    # Create base pattern from words with strict word boundaries
+    word_pattern = r'\b(' + '|'.join(all_words) + r')\b'
+    
+    # More precise patterns for common obfuscation techniques
+    edge_cases = [
+        # f-word variations with strict context
+        r'\b[f]+[\W_]*[u]+[\W_]*[c]+[\W_]*[k]+(?:ing|er|ed)?\b',
+        # "what the f" variations with mandatory following characters
+        r'what\s+the\s+[f]+[\W_]*(?:[u]+[\W_]*)?[c]+[\W_]*[k]+\b',
+        # "the f" variations with mandatory following characters
+        r'\bthe\s+[f]+[\W_]*(?:[u]+[\W_]*)?[c]+[\W_]*[k]+\b',
+        # More specific bullcrap pattern
+        r'\bbull\s*cr[a@4]p\b'
+    ]
+    
+    # Combine patterns with case insensitivity
+    full_pattern = f"(?i)(?:{word_pattern}|{'|'.join(edge_cases)})"
+    
+    logger.info(f"Loaded {len(all_words)} profanity words and phrases")
+    return full_pattern
+
+def mask_profanity_text(text, pattern):
+    """Mask profanity in text for logging purposes."""
+    if not text or not isinstance(text, str):
+        return text
+    return re.sub(pattern, '***', text)
 
 def get_last_processed_batch(spark, subreddit):
     """
@@ -33,34 +83,21 @@ def get_last_processed_batch(spark, subreddit):
         max_timestamp = posts_df.collect()[0][0]
         return float(max_timestamp) if max_timestamp else 0
     except Exception as e:
-        logging.warning(f"No existing processed data found for {subreddit}: {e}")
+        logger.warning(f"No existing processed data found for {subreddit}: {e}")
         return 0
-
-def filter_profanity(text: str) -> bool:
-    """
-    Check if text contains profanity.
-    Returns True if text is clean, False if it contains profanity.
-    """
-    if not text or not isinstance(text, str):
-        return True
-        
-    profanity_patterns = [
-        r'(?i)\b(fuck|shit|damn|bitch|cunt|ass)\b',
-        r'(?i)\b(f\*\*k|sh\*t|b\*tch|a\*\*)\b',  # Common obfuscated versions
-        r'(?i)f[^\w]?c[^\w]?k',  # Attempts to bypass with special chars
-        r'(?i)s[^\w]?h[^\w]?i[^\w]?t',
-    ]
-    
-    return not any(re.search(pattern, text) for pattern in profanity_patterns)
 
 def preprocess_data(spark, conn):
     """
     Preprocesses the raw Reddit data from PostgreSQL using PySpark with incremental loading.
     Only processes new data since the last processed timestamp.
     """
+    # Initialize profanity filtering
+    profanity_pattern = get_profanity_pattern()
+    logger.info("Initialized profanity filter pattern")
+    
     for subreddit in SUBREDDITS:
         current_table_name = f"raw_data.raw_{subreddit.lower()}"
-        logging.info(f"Processing data for subreddit: {subreddit}")
+        logger.info(f"Processing data for subreddit: {subreddit}")
 
         # Get last processed timestamp
         last_processed = get_last_processed_batch(spark, subreddit)
@@ -75,7 +112,7 @@ def preprocess_data(spark, conn):
             .load()
 
         if df.count() == 0:
-            logging.info(f"No new data to process for {subreddit}")
+            logger.info(f"No new data to process for {subreddit}")
             continue
 
         # Process posts
@@ -88,17 +125,16 @@ def preprocess_data(spark, conn):
             (F.col("author") != "[deleted]")
         ).dropDuplicates(["post_id"])
 
-        # Combine profanity patterns into a single regex pattern
-        profanity_pattern = r'(?i)\b(fuck|shit|damn|bitch|cunt|ass)\b|' + \
-                           r'(?i)\b(f\*\*k|sh\*t|b\*tch|a\*\*)\b|' + \
-                           r'(?i)f[^\w]?c[^\w]?k|' + \
-                           r'(?i)s[^\w]?h[^\w]?i[^\w]?t'
-
-        # Apply profanity filter to posts using rlike
-        df_posts_filtered = df_posts_filtered.filter(
-            ~F.col("title").rlike(profanity_pattern)
+        # Log posts before profanity censoring
+        total_posts = df_posts_filtered.count()
+        
+        # Censor profanity in posts
+        df_posts_filtered = df_posts_filtered.withColumn(
+            "title",
+            F.regexp_replace(F.col("title"), profanity_pattern, "***")
         )
         
+        logger.info(f"Censored profanity in {total_posts} posts for {subreddit}")
         df_posts_filtered = df_posts_filtered.drop("comments")
 
         # Process comments
@@ -125,14 +161,19 @@ def preprocess_data(spark, conn):
                 F.col("comment.body").alias("body"),
                 F.col("comment.author").alias("author"),
                 F.col("comment.comment_id").alias("comment_id"),
-                # Convert epoch timestamp to proper timestamp with timezone
                 F.to_timestamp(F.col("comment.created_utc")).alias("created_utc")
             )
 
-        # Filter and deduplicate comments
-        comments_filtered_df = comments_df.filter(
-            ~F.col("body").rlike(profanity_pattern)
+        # Log comments before profanity censoring
+        total_comments = comments_df.count()
+        
+        # Censor profanity in comments
+        comments_filtered_df = comments_df.withColumn(
+            "body",
+            F.regexp_replace(F.col("body"), profanity_pattern, "***")
         ).dropDuplicates(["comment_id"])
+        
+        logger.info(f"Censored profanity in {total_comments} comments for {subreddit}")
 
         # Save processed data
         df_posts_filtered.write.format("jdbc") \
@@ -153,4 +194,4 @@ def preprocess_data(spark, conn):
             .mode("append") \
             .save()
 
-        logging.info(f"New data for {subreddit} has been successfully processed and appended to PostgreSQL.")
+        logger.info(f"New data for {subreddit} has been successfully processed and appended to PostgreSQL.")

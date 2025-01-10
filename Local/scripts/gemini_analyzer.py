@@ -9,7 +9,6 @@ Owner: Sulman Khan
 
 import os
 import sys
-import logging
 import psycopg2
 import google.generativeai as genai
 from datetime import datetime
@@ -21,7 +20,10 @@ LOCAL_DIR = os.path.dirname(SCRIPT_DIR)
 sys.path.append(LOCAL_DIR)
 
 from config.config import get_database_config, SUBREDDITS, GOOGLE_GEMINI_API_KEY
-from utils.custom_logging import setup_logging
+from utils.custom_logging import get_logger
+
+# Initialize logger
+logger = get_logger(__name__)  # This will create a logger named 'reddit_pipeline.scripts.gemini_analyzer'
 
 # Initialize Google Gemini API
 genai.configure(api_key=GOOGLE_GEMINI_API_KEY)
@@ -117,7 +119,7 @@ def get_formatted_subreddit_name(subreddit: str) -> str:
 
 def process_subreddit(model, cur, subreddit, output_dir):
     """Process a single subreddit's data."""
-    logging.info(f"Analyzing data for subreddit: {subreddit}")
+    logger.info(f"Analyzing data for subreddit: {subreddit}")
     
     # Fetch data
     cur.execute("""
@@ -131,7 +133,7 @@ def process_subreddit(model, cur, subreddit, output_dir):
     rows = cur.fetchall()
 
     if not rows:
-        logging.info(f"No data found for subreddit: {subreddit}")
+        logger.info(f"No data found for subreddit: {subreddit}")
         return
 
     # Prepare prompt
@@ -157,10 +159,10 @@ def process_subreddit(model, cur, subreddit, output_dir):
         
         with open(output_file_path, "w", encoding="utf-8") as f:
             f.write(formatted_response)
-        logging.info(f"Output saved to {output_file_path}")
+        logger.info(f"Output saved to {output_file_path}")
         
     except Exception as e:
-        logging.error(f"Error processing subreddit {subreddit}: {e}")
+        logger.error(f"Error processing subreddit {subreddit}: {e}")
 
 def clean_markdown_file(file_path):
     """
@@ -187,9 +189,9 @@ def clean_markdown_file(file_path):
         with open(file_path, 'w', encoding='utf-8') as f:
             f.writelines(cleaned_lines)
         
-        logging.info(f"Successfully cleaned markdown file: {file_path}")
+        logger.info(f"Successfully cleaned markdown file: {file_path}")
     except Exception as e:
-        logging.error(f"Error cleaning markdown file {file_path}: {e}")
+        logger.error(f"Error cleaning markdown file {file_path}: {e}")
         raise
 
 def analyze_data():
@@ -203,7 +205,6 @@ def analyze_data():
     4. Process each subreddit
     5. Clean generated markdown files
     """
-    setup_logging()
     conn = None
     cur = None
     
@@ -216,17 +217,17 @@ def analyze_data():
         
         output_dir = os.path.join('/opt/airflow/results', year, month, day)
         os.makedirs(output_dir, exist_ok=True)
-        logging.info(f"Output directory set to {output_dir}")
+        logger.info(f"Output directory set to {output_dir}")
 
         # 2. Initialize model
         model = genai.GenerativeModel('gemini-2.0-flash-exp')
-        logging.info("Model loaded")
+        logger.info("Model loaded")
 
         # 3. Connect to database
         db_config = get_database_config()
         conn = psycopg2.connect(**db_config)
         cur = conn.cursor()
-        logging.info("Database connection established")
+        logger.info("Database connection established")
 
         # 4. Process subreddits
         for subreddit in SUBREDDITS:
@@ -239,14 +240,14 @@ def analyze_data():
                 clean_markdown_file(file_path)
 
     except Exception as e:
-        logging.error(f"Pipeline failed: {e}")
+        logger.error(f"Pipeline failed: {e}")
         raise
     finally:
         if cur:
             cur.close()
         if conn:
             conn.close()
-            logging.info("Database connection closed")
+            logger.info("Database connection closed")
 
 if __name__ == "__main__":
     analyze_data()

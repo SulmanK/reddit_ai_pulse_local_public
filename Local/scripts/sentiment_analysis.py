@@ -9,7 +9,6 @@ Owner: Sulman Khan
 
 import os
 import sys
-import logging
 from datetime import datetime
 import psycopg2
 from transformers import pipeline, AutoModelForSequenceClassification, AutoTokenizer
@@ -22,7 +21,10 @@ LOCAL_DIR = os.path.dirname(SCRIPT_DIR)
 sys.path.append(LOCAL_DIR)
 
 from config.config import get_database_config
-from utils.custom_logging import setup_logging
+from utils.custom_logging import get_logger
+
+# Initialize logger
+logger = get_logger(__name__)  # This will create a logger named 'reddit_pipeline.scripts.sentiment_analysis'
 
 # Define emotion labels mapping
 EMOTION_LABELS = {
@@ -63,7 +65,7 @@ def initialize_emotion_analyzer():
 
         return emotion_analyzer
     except Exception as e:
-        logging.error(f"Error initializing emotion analyzer: {e}")
+        logger.error(f"Error initializing emotion analyzer: {e}")
         raise
 
 def truncate_text(text, max_length=500):
@@ -158,7 +160,7 @@ def perform_sentiment_analysis(text, emotion_analyzer):
         return sentiment_label, float(emotion_score), emotion_label
         
     except Exception as e:
-        logging.error(f"Error during sentiment analysis: {str(e)}")
+        logger.error(f"Error during sentiment analysis: {str(e)}")
         return "Neutral", 0.0, "Error in analysis"
 
 def analyze_sentiment():
@@ -176,7 +178,6 @@ def analyze_sentiment():
         - Implements batch processing
         - Handles database transactions safely
     """
-    setup_logging()
     conn = None
     cur = None
 
@@ -190,7 +191,7 @@ def analyze_sentiment():
             
             # Initialize components
             emotion_analyzer = initialize_emotion_analyzer()
-            logging.info("Emotion analysis model loaded")
+            logger.info("Emotion analysis model loaded")
 
             # Database connection
             db_config = get_database_config()
@@ -205,7 +206,7 @@ def analyze_sentiment():
                 FROM processed_data.current_summary_staging
             """)
             rows = cur.fetchall()
-            logging.info(f"Fetched {len(rows)} rows from database")
+            logger.info(f"Fetched {len(rows)} rows from database")
 
             # Process each comment
             for i, row in enumerate(rows):
@@ -232,14 +233,14 @@ def analyze_sentiment():
                     """, (comment_id, sentiment_score, sentiment_label))
                     
                     conn.commit()
-                    logging.info(f"Sentiment analysis added for comment_id: {comment_id}")
+                    logger.info(f"Sentiment analysis added for comment_id: {comment_id}")
                     
                 except Exception as e:
-                    logging.error(f"Error processing comment {comment_id}: {str(e)}")
+                    logger.error(f"Error processing comment {comment_id}: {str(e)}")
                     continue
 
     except Exception as e:
-        logging.error(f"Pipeline failed: {e}")
+        logger.error(f"Pipeline failed: {e}")
         if conn:
             conn.rollback()
         raise
@@ -248,7 +249,7 @@ def analyze_sentiment():
             cur.close()
         if conn:
             conn.close()
-            logging.info("Database connection closed")
+            logger.info("Database connection closed")
 
 if __name__ == "__main__":
     analyze_sentiment()

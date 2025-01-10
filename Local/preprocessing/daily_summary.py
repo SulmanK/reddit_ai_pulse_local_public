@@ -7,11 +7,13 @@ It aggregates posts and comments data for each subreddit on a daily basis.
 Owner: Sulman Khan
 """
 
-
 import pyspark.sql.functions as F
 from datetime import datetime
-import logging
+from utils.custom_logging import get_logger
 from config.config import DB_PARAMS, SUBREDDITS
+
+# Configure logging
+logger = get_logger(__name__)  # This will create a logger named 'reddit_pipeline.preprocessing.daily_summary'
 
 jdbc_url = f"jdbc:postgresql://{DB_PARAMS['host']}:{DB_PARAMS['port']}/{DB_PARAMS['dbname']}"
 
@@ -32,7 +34,7 @@ def get_last_processed_timestamp(spark):
         last_processed = summary_df.agg(F.max("processed_date")).collect()[0][0]
         return last_processed if last_processed else None
     except Exception as e:
-        logging.warning(f"No existing summary data found: {e}")
+        logger.warning(f"No existing summary data found: {e}")
         return None
 
 def generate_daily_summaries(spark):
@@ -45,12 +47,12 @@ def generate_daily_summaries(spark):
     total_summaries_added = 0
     
     if last_processed:
-        logging.info(f"Processing summaries from {last_processed} to {current_timestamp}")
+        logger.info(f"Processing summaries from {last_processed} to {current_timestamp}")
     else:
-        logging.info("No previous summaries found. Processing all available data.")
+        logger.info("No previous summaries found. Processing all available data.")
 
     for subreddit in SUBREDDITS:
-        logging.info(f"Processing daily summary for subreddit: {subreddit}")
+        logger.info(f"Processing daily summary for subreddit: {subreddit}")
 
         # Load posts and comments tables
         posts_df = spark.read.format("jdbc") \
@@ -62,7 +64,7 @@ def generate_daily_summaries(spark):
             .load()
 
         posts_count = posts_df.count()
-        logging.info(f"Found {posts_count} posts for {subreddit}")
+        logger.info(f"Found {posts_count} posts for {subreddit}")
 
         comments_df = spark.read.format("jdbc") \
             .option("url", jdbc_url) \
@@ -73,7 +75,7 @@ def generate_daily_summaries(spark):
             .load()
 
         comments_count = comments_df.count()
-        logging.info(f"Found {comments_count} comments for {subreddit}")
+        logger.info(f"Found {comments_count} comments for {subreddit}")
 
         # Filter posts and comments based on created_utc timestamp
         if last_processed:
@@ -91,10 +93,10 @@ def generate_daily_summaries(spark):
             daily_comments_df = comments_df.filter(F.col("created_utc") <= current_timestamp)
 
         filtered_posts_count = daily_posts_df.count()
-        logging.info(f"Filtered to {filtered_posts_count} posts for processing")
+        logger.info(f"Filtered to {filtered_posts_count} posts for processing")
 
         if filtered_posts_count == 0:
-            logging.info(f"No new posts to summarize for {subreddit}")
+            logger.info(f"No new posts to summarize for {subreddit}")
             continue
 
         # Join posts and comments on post_id
@@ -125,7 +127,7 @@ def generate_daily_summaries(spark):
         )
 
         filtered_summaries_count = daily_summary_df.count()
-        logging.info(f"Generated {filtered_summaries_count} summaries before deduplication")
+        logger.info(f"Generated {filtered_summaries_count} summaries before deduplication")
 
         # Deduplication Logic
         existing_summary_df = spark.read.format("jdbc") \
@@ -157,8 +159,8 @@ def generate_daily_summaries(spark):
                 .save()
             
             total_summaries_added += new_summaries_count
-            logging.info(f"Successfully added {new_summaries_count} new summaries for {subreddit}")
+            logger.info(f"Successfully added {new_summaries_count} new summaries for {subreddit}")
         else:
-            logging.info(f"No new unique summaries to add for {subreddit}")
+            logger.info(f"No new unique summaries to add for {subreddit}")
 
-    logging.info(f"Processing complete. Total new summaries added: {total_summaries_added}")
+    logger.info(f"Processing complete. Total new summaries added: {total_summaries_added}")

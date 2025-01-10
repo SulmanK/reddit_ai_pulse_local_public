@@ -2,3 +2,4 @@ apache-airflow==2.8.1
 apache-airflow-providers-postgres>=5.10.0 
 prometheus_client<0.21.1
 statsd==4.0.1
+better-profanity==0.7.0

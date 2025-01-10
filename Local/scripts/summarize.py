@@ -9,7 +9,6 @@ Owner: Sulman Khan
 
 import os
 import sys
-import logging
 from datetime import datetime
 import psycopg2
 from transformers import pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
@@ -23,7 +22,10 @@ LOCAL_DIR = os.path.dirname(SCRIPT_DIR)
 sys.path.append(LOCAL_DIR)
 
 from config.config import get_database_config
-from utils.custom_logging import setup_logging
+from utils.custom_logging import get_logger
+
+# Initialize logger
+logger = get_logger(__name__)  # This will create a logger named 'reddit_pipeline.scripts.summarize'
 
 def create_summarizer():
     """
@@ -60,7 +62,7 @@ def create_summarizer():
         
         return summarizer
     except Exception as e:
-        logging.error(f"Error loading summarization model: {str(e)}")
+        logger.error(f"Error loading summarization model: {str(e)}")
         raise
 
 def generate_summary(comment_body, summarizer):
@@ -78,7 +80,7 @@ def generate_summary(comment_body, summarizer):
         return ""
         
     if len(comment_body.split()) <= 59:
-        logging.info("Comment is less than the max length")
+        logger.info("Comment is less than the max length")
         return comment_body 
         
     try:
@@ -86,7 +88,7 @@ def generate_summary(comment_body, summarizer):
         if summary and isinstance(summary, list) and len(summary) > 0:
             return summary[0]['summary_text']
     except Exception as e:
-        logging.error(f"Summarization failed: {e}")
+        logger.error(f"Summarization failed: {e}")
     
     return ""
 
@@ -105,7 +107,6 @@ def summarize_posts():
         - Implements efficient text processing
         - Handles database transactions safely
     """
-    setup_logging()
     conn = None
     cur = None
 
@@ -123,7 +124,7 @@ def summarize_posts():
 
             # Initialize components
             summarizer = create_summarizer()
-            logging.info("Summarization model loaded")
+            logger.info("Summarization model loaded")
 
             # Database connection
             db_config = get_database_config()
@@ -138,7 +139,7 @@ def summarize_posts():
                 FROM processed_data.current_summary_staging
             """)
             rows = cur.fetchall()
-            logging.info(f"Fetched {len(rows)} rows from database")
+            logger.info(f"Fetched {len(rows)} rows from database")
 
             # Process each comment
             for i, row in enumerate(rows):
@@ -161,14 +162,14 @@ def summarize_posts():
                     """, (comment_id, summary_text))
                     
                     conn.commit()
-                    logging.info(f"Summary added for comment_id: {comment_id}")
+                    logger.info(f"Summary added for comment_id: {comment_id}")
                     
                 except Exception as e:
-                    logging.error(f"Error processing comment {comment_id}: {str(e)}")
+                    logger.error(f"Error processing comment {comment_id}: {str(e)}")
                     continue
 
     except Exception as e:
-        logging.error(f"Pipeline failed: {e}")
+        logger.error(f"Pipeline failed: {e}")
         if conn:
             conn.rollback()
         raise
@@ -177,7 +178,7 @@ def summarize_posts():
             cur.close()
         if conn:
             conn.close()
-            logging.info("Database connection closed")
+            logger.info("Database connection closed")
 
 if __name__ == "__main__":
     summarize_posts()
